@@ -98,17 +98,13 @@ install_authorized_key() {
   echo "$key_options $key" >> "$home_dir/.ssh/authorized_keys"
 }
 
-strip_root_slash() {
-  local str="$(cat)"
-  if [ "${str:0:1}" == "/" ]; then
-    echo "$str" | cut -c 2-
-  else
-    echo "$str"
-  fi
-}
-
-parse_repo_from_ssh_command() {
-  awk '{print $2}' | perl -pe 's/(?<!\\)'\''//g' | sed 's/\\'\''/'\''/g' | strip_root_slash
+parse_reponame() {
+  local name
+  name="$(cat)"
+  name="$(basename "$name")"
+  name="${name//\'/}"          # Remove single quote characters
+  name="${name%/}"             # Remove trailing slash
+  echo "$name"
 }
 
 ensure_bare_repo() {
@@ -202,7 +198,7 @@ main() {
         exit
       fi
       export RECEIVE_REPONAME
-      RECEIVE_REPONAME="$(echo "$SSH_ORIGINAL_COMMAND" | parse_repo_from_ssh_command)"
+      RECEIVE_REPONAME="$(echo "$SSH_ORIGINAL_COMMAND" | awk '{print $2}' | parse_reponame)"
       export RECEIVE_REPOPATH="$GITHOME/$RECEIVE_REPONAME"
       ensure_bare_repo "$RECEIVE_REPOPATH"
       ensure_prereceive_hook "$RECEIVE_REPOPATH" "$SELF"
