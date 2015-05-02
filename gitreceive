@@ -51,7 +51,6 @@ create_base_script() {
 
 newrev="\$1"
 oldrev="\$2"
-reponame="\$3"
 repopath="\$4"
 username="\$5"
 fingerprint="\$6"
@@ -62,7 +61,6 @@ fingerprint="\$6"
 #   -X 'POST' \\
 #   -F "newrev=\$newrev" \\
 #   -F "oldrev=\$oldrev" \\
-#   -F "reponame=\$reponame" \\
 #   -F "repopath=\$repopath" \\
 #   -F "username=\$username" \\
 #   -F "fingerprint=\$fingerprint" \\
@@ -151,20 +149,20 @@ EOF
 }
 
 trigger_receiver() {
-  declare repo_name="$1" repo_abspath="$2" user="$3" fingerprint="$4"
+  declare repo_abspath="$2" user="$3" fingerprint="$4"
   while read oldrev newrev refname; do
     if [[ "$newrev" != "$GITZERO" && "$refname" == "$GITREF" ]]; then
-      git archive "$newrev" | "$GIT_RECEIVER" "$newrev" "$oldrev" "$repo_name" "$repo_abspath" "$user" "$fingerprint"
+      git archive "$newrev" | "$GIT_RECEIVER" "$newrev" "$oldrev" "$repo_abspath" "$user" "$fingerprint"
     fi
   done
 }
 
 trigger_post_receive() {
-  declare repo_name="$1" repo_abspath="$2" user="$3" fingerprint="$4"
+  declare repo_abspath="$2" user="$3" fingerprint="$4"
   while read oldrev newrev refname; do
     if [[ "$newrev" != "$GITZERO" && "$refname" == "$GITREF" ]]; then
       git symbolic-ref HEAD "$refname"
-      "$GIT_POSTRECEIVER" "$newrev" "$oldrev" "$repo_name" "$repo_abspath" "$user" "$fingerprint"
+      "$GIT_POSTRECEIVER" "$newrev" "$oldrev" "$repo_abspath" "$user" "$fingerprint"
     fi
   done
 }
@@ -212,11 +210,11 @@ main() {
       ;;
 
     hook)
-      trigger_receiver "$RECEIVE_REPONAME" "$RECEIVE_REPOPATH" "$RECEIVE_USER" "$RECEIVE_FINGERPRINT" | strip_remote_prefix
+      trigger_receiver "$RECEIVE_REPOPATH" "$RECEIVE_USER" "$RECEIVE_FINGERPRINT" | strip_remote_prefix
       ;;
 
     post)
-      trigger_post_receive "$RECEIVE_REPONAME" "$RECEIVE_REPOPATH" "$RECEIVE_USER" "$RECEIVE_FINGERPRINT" 2>&1 | strip_remote_prefix
+      trigger_post_receive "$RECEIVE_REPOPATH" "$RECEIVE_USER" "$RECEIVE_FINGERPRINT" 2>&1 | strip_remote_prefix
       ;;
 
     *)
