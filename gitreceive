@@ -13,9 +13,10 @@ readonly GIT_POSTRECEIVER="$GITHOME/post-receiver"
 
 # Given a relative path, calculate the absolute path
 absolute_path() {
-  cd "$(dirname "$1")" > /dev/null
-  local abspath="$(pwd -P)"
-  cd - >/dev/null
+  local abspath
+  pushd "$(dirname "$1")" > /dev/null
+  abspath="$(pwd -P)"
+  popd >/dev/null
   echo "$abspath/$(basename "$1")"
 }
 
@@ -29,7 +30,7 @@ setup_git_user() {
 
 create_base_script() {
   declare script_path="$1"
-  if [ ! -f "$script_path" ]; then
+  if [[ ! -f "$script_path" ]]; then
     cat > "$script_path" <<EOF
 #!/bin/bash
 #
@@ -114,7 +115,7 @@ parse_repo_from_ssh_command() {
 
 ensure_bare_repo() {
   declare repo_abspath="$1"
-  if [ ! -d "$repo_abspath" ]; then
+  if [[ ! -d "$repo_abspath" ]]; then
     git init --bare "$repo_abspath" >/dev/null
   fi
 }
@@ -124,6 +125,11 @@ ensure_prereceive_hook() {
   local hook_path="$repo_abspath/hooks/pre-receive"
   cat > "$hook_path" <<EOF
 #!/bin/bash
+#
+# NOTE: If you use -e option here. You need to pipe the "cat" command
+#       in the "receive" script
+set -o pipefail
+
 cat | $self hook
 exit 0
 EOF
@@ -135,7 +141,10 @@ ensure_postreceive_hook() {
   local hook_path="$repo_abspath/hooks/post-receive"
   cat > "$hook_path" <<EOF
 #!/bin/bash
-cat | $self post
+set -eo pipefail
+
+$self post
+
 exit 0
 EOF
   chmod +x "$hook_path"
@@ -167,7 +176,7 @@ strip_remote_prefix() {
 main() {
   readonly SELF="$(absolute_path "$0")"
 
-  case "$1" in
+  case "${1:-help}" in
   # Public commands
 
     init) # gitreceive init
