@@ -2,14 +2,14 @@
 
 set -euo pipefail
 
-readonly GITUSER="${GITUSER:-git}"
-readonly GITHOME="/home/$GITUSER"
+declare -r GITUSER="${GITUSER:-git}"
+declare -r GITHOME="/home/$GITUSER"
 
-readonly GITREF="refs/heads/master"
-readonly GITZERO="0000000000000000000000000000000000000000"
+declare -r GITREF="refs/heads/master"
+declare -r GITZERO="0000000000000000000000000000000000000000"
 
-readonly GIT_RECEIVER="$GITHOME/receiver"
-readonly GIT_POSTRECEIVER="$GITHOME/post-receiver"
+declare -r GIT_RECEIVER="$GITHOME/receiver"
+declare -r GIT_POSTRECEIVER="$GITHOME/post-receiver"
 
 # Given a relative path, calculate the absolute path
 absolute_path() {
@@ -21,7 +21,7 @@ absolute_path() {
 }
 
 setup_git_user() {
-  declare git_user="$1" home_dir="$2"
+  local git_user="$1" home_dir="$2"
   useradd -d "$home_dir" "$git_user" || true
   mkdir -p "$home_dir/.ssh"
   touch "$home_dir/.ssh/authorized_keys"
@@ -29,7 +29,7 @@ setup_git_user() {
 }
 
 create_base_script() {
-  declare script_path="$1"
+  local script_path="$1"
   if [[ ! -f "$script_path" ]]; then
     cat > "$script_path" <<EOF
 #!/bin/bash
@@ -73,14 +73,14 @@ EOF
 }
 
 setup_receiver_script() {
-  declare user="$1"
+  local user="$1"
   create_base_script "$GIT_RECEIVER"
   chmod +x "$GIT_RECEIVER"
   chown "$user" "$GIT_RECEIVER"
 }
 
 setup_postreceiver_script() {
-  declare user="$1"
+  local user="$1"
   create_base_script "$GIT_POSTRECEIVER"
   chmod +x "$GIT_POSTRECEIVER"
   chown "$user" "$GIT_POSTRECEIVER"
@@ -91,8 +91,8 @@ generate_fingerprint() {
 }
 
 install_authorized_key() {
-  declare key="$1" name="$2" home_dir="$3" git_user="$4" self="$5"
-  local fingerprint="$(echo "$key" | generate_fingerprint)"
+  local key="$1" name="$2" home_dir="$3" git_user="$4" self="$5" fingerprint
+  fingerprint="$(echo "$key" | generate_fingerprint)"
   local forced_command="GITUSER=$git_user $self run $name $fingerprint"
   local key_options="command=\"$forced_command\",no-agent-forwarding,no-pty,no-user-rc,no-X11-forwarding,no-port-forwarding"
   echo "$key_options $key" >> "$home_dir/.ssh/authorized_keys"
@@ -112,15 +112,14 @@ parse_repo_from_ssh_command() {
 }
 
 ensure_bare_repo() {
-  declare repo_abspath="$1"
+  local repo_abspath="$1"
   if [[ ! -d "$repo_abspath" ]]; then
     git init --bare "$repo_abspath" >/dev/null
   fi
 }
 
 ensure_prereceive_hook() {
-  declare repo_abspath="$1" self="$2"
-  local hook_path="$repo_abspath/hooks/pre-receive"
+  local repo_abspath="$1" self="$2" hook_path="$repo_abspath/hooks/pre-receive"
   cat > "$hook_path" <<EOF
 #!/bin/bash
 #
@@ -135,8 +134,7 @@ EOF
 }
 
 ensure_postreceive_hook() {
-  declare repo_abspath="$1" self="$2"
-  local hook_path="$repo_abspath/hooks/post-receive"
+  local repo_abspath="$1" self="$2" hook_path="$repo_abspath/hooks/post-receive"
   cat > "$hook_path" <<EOF
 #!/bin/bash
 set -eo pipefail
@@ -149,7 +147,7 @@ EOF
 }
 
 trigger_receiver() {
-  declare repo_abspath="$2" user="$3" fingerprint="$4"
+  local repo_abspath="$2" user="$3" fingerprint="$4"
   while read oldrev newrev refname; do
     if [[ "$newrev" != "$GITZERO" && "$refname" == "$GITREF" ]]; then
       git archive "$newrev" | "$GIT_RECEIVER" "$newrev" "$oldrev" "$repo_abspath" "$user" "$fingerprint"
@@ -158,7 +156,7 @@ trigger_receiver() {
 }
 
 trigger_post_receive() {
-  declare repo_abspath="$2" user="$3" fingerprint="$4"
+  local repo_abspath="$2" user="$3" fingerprint="$4"
   while read oldrev newrev refname; do
     if [[ "$newrev" != "$GITZERO" && "$refname" == "$GITREF" ]]; then
       git symbolic-ref HEAD "$refname"
@@ -172,7 +170,8 @@ strip_remote_prefix() {
 }
 
 main() {
-  readonly SELF="$(absolute_path "$0")"
+  local SELF
+  SELF="$(absolute_path "$0")"
 
   case "${1:-help}" in
   # Public commands
@@ -185,8 +184,9 @@ main() {
       ;;
 
     upload-key) # sudo gitreceive upload-key <username>
-      declare name="$2"
-      local key="$(cat)"
+      local name="$2"
+      local key
+      key="$(cat)"
       install_authorized_key "$key" "$name" "$GITHOME" "$GITUSER" "$SELF"
       echo "$key" | generate_fingerprint
       ;;
@@ -194,14 +194,15 @@ main() {
   # Internal commands
 
     run)
-      declare user="$2" fingerprint="$3"
+      local user="$2" fingerprint="$3"
       export RECEIVE_USER="$user"
       export RECEIVE_FINGERPRINT="$fingerprint"
-      export RECEIVE_REPONAME="$(echo "${SSH_ORIGINAL_COMMAND:-}" | parse_repo_from_ssh_command)"
-      if [[ "x$RECEIVE_REPONAME" == "x" ]]; then
+      if [[ -z "$SSH_ORIGINAL_COMMAND" ]]; then
         echo "Hi $RECEIVE_USER! You've successfully authenticated, but shell access is disabled."
         exit
       fi
+      export RECEIVE_REPONAME
+      RECEIVE_REPONAME="$(echo "$SSH_ORIGINAL_COMMAND" | parse_repo_from_ssh_command)"
       export RECEIVE_REPOPATH="$GITHOME/$RECEIVE_REPONAME"
       ensure_bare_repo "$RECEIVE_REPOPATH"
       ensure_prereceive_hook "$RECEIVE_REPOPATH" "$SELF"
