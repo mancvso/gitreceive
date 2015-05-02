@@ -38,10 +38,9 @@ create_base_script() {
 #
 #     \$1      new revision
 #     \$2      old revision
-#     \$3      repository name
-#     \$4      repository absolute path
-#     \$5      user whom pushed commit
-#     \$6      user fingerprint
+#     \$3      repository absolute path
+#     \$4      user whom pushed commit
+#     \$5      user fingerprint
 #
 # The script "receiver" also receive the archive of the new revision
 # through stdin:
@@ -51,9 +50,9 @@ create_base_script() {
 
 newrev="\$1"
 oldrev="\$2"
-repopath="\$4"
-username="\$5"
-fingerprint="\$6"
+repopath="\$3"
+username="\$4"
+fingerprint="\$5"
 
 # URL=https://httpbin.org/post
 # echo "----> Posting to \$URL ..."
@@ -104,6 +103,7 @@ parse_reponame() {
   name="$(basename "$name")"
   name="${name//\'/}"          # Remove single quote characters
   name="${name%/}"             # Remove trailing slash
+  name="${name%.git}"          # Remove trailing .git
   echo "$name"
 }
 
@@ -115,7 +115,8 @@ ensure_bare_repo() {
 }
 
 ensure_prereceive_hook() {
-  local repo_abspath="$1" self="$2" hook_path="$repo_abspath/hooks/pre-receive"
+  local repo_abspath="$1" self="$2"
+  local hook_path="$repo_abspath/hooks/pre-receive"
   cat > "$hook_path" <<EOF
 #!/bin/bash
 #
@@ -130,7 +131,8 @@ EOF
 }
 
 ensure_postreceive_hook() {
-  local repo_abspath="$1" self="$2" hook_path="$repo_abspath/hooks/post-receive"
+  local repo_abspath="$1" self="$2"
+  local hook_path="$repo_abspath/hooks/post-receive"
   cat > "$hook_path" <<EOF
 #!/bin/bash
 set -eo pipefail
@@ -143,7 +145,7 @@ EOF
 }
 
 trigger_receiver() {
-  local repo_abspath="$2" user="$3" fingerprint="$4"
+  local repo_abspath="$1" user="$2" fingerprint="$3"
   while read oldrev newrev refname; do
     if [[ "$newrev" != "$GITZERO" && "$refname" == "$GITREF" ]]; then
       git archive "$newrev" | "$GIT_RECEIVER" "$newrev" "$oldrev" "$repo_abspath" "$user" "$fingerprint"
@@ -152,7 +154,7 @@ trigger_receiver() {
 }
 
 trigger_post_receive() {
-  local repo_abspath="$2" user="$3" fingerprint="$4"
+  local repo_abspath="$1" user="$2" fingerprint="$3"
   while read oldrev newrev refname; do
     if [[ "$newrev" != "$GITZERO" && "$refname" == "$GITREF" ]]; then
       git symbolic-ref HEAD "$refname"
