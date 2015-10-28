@@ -36,11 +36,11 @@ create_base_script() {
 #
 # variables:
 #
-#     \$1      new revision
-#     \$2      old revision
-#     \$3      repository absolute path
-#     \$4      user whom pushed commit
-#     \$5      user fingerprint
+#     $1      new revision
+#     $2      old revision
+#     $3      repository absolute path
+#     $4      user whom pushed commit
+#     $5      user fingerprint
 #
 # The script "receiver" also receive the archive of the new revision
 # through stdin:
@@ -48,25 +48,54 @@ create_base_script() {
 #     - (stdin)     archive of latest revision
 #
 
-newrev="\$1"
-oldrev="\$2"
-repopath="\$3"
-username="\$4"
-fingerprint="\$5"
+newrev="$1"
+oldrev="$2"
+repopath="$3"
+username="$4"
+fingerprint="$5"
+APP_PATHS=(${repopath//\// })
+APP=${APP_PATHS[${#APP_PATHS[@]} - 1]}
 
-# URL=https://httpbin.org/post
-# echo "----> Posting to \$URL ..."
-# curl \\
-#   -X 'POST' \\
-#   -F "newrev=\$newrev" \\
-#   -F "oldrev=\$oldrev" \\
-#   -F "repopath=\$repopath" \\
-#   -F "username=\$username" \\
-#   -F "fingerprint=\$fingerprint" \\
-#   -F contents=@- \\
-#   --silent \$URL
+echo "==============================="
+echo "    Santopanel                 "
+echo "-------------------------------"
 
-exit 0
+APPDETAILS=$(curl -sS "http://localhost:2809/api/application/buildpack/$APP" | jq -r -c ".ID,.Recipe_version,.Domain,.Links,.Env_var")
+#echo $APPDETAILS
+SEP=' '
+APPARRAY=(${APPDETAILS//$SEP/ })
+
+#echo $APPARRAY
+
+APPID=${APPARRAY[0]}
+APPVERSION=${APPARRAY[1]}
+APPDOMAIN=${APPARRAY[2]}
+APPLINKS=${APPARRAY[3]}
+APPENVS=${APPARRAY[4]}
+
+#echo "APPID is $APPID while APPVERSION is $APPVERSION"
+
+if [ "$APPID" != "" ]
+then
+  echo "=====> Construyendo aplicación... (esto puede tardar bastante)"
+  JSON="{\"Id\":\"$APPID\", \"Name\":\"$APP\", \"Recipe\":\"buildpack\", \"Domain\": \"$APPDOMAIN\", \"Recipe_version\":\"$APPVERSION\", \"Scale\":1, \"Force\":true, \"Env_var\": $APPENVS, \"Links\":$APPLINKS }"
+  echo $JSON
+  cat | /usr/local/bin/buildstep $APP
+  echo "=====> Levantando aplicación..."
+  curl -X POST -sS -H "Content-Type:application/json" -d "$JSON" "http://localhost:2809/api/application" | jq ".status"
+  echo "======================= Santopanel ============"
+  echo " Tu aplicación está disponible en:"
+  echo "-----> $APPDOMAIN"
+  echo "======================= Santopanel ============"
+  exit 0
+else
+  echo "======================= ERROR =============================="
+  echo "Necesitas registrar la aplicación antes de efectuar un push"
+  echo ""
+  echo "http://panel.omen-dev.com/app"
+  echo "============================================================"
+  exit 1
+fi
 EOF
   fi
 }
